@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voxel Coder - Computational Thinking Game</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Prompt:wght@400;600&display=swap" rel="stylesheet">
+    <!-- Three.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        :root {
+            --mc-bg: #c6c6c6;
+            --mc-border-light: #ffffff;
+            --mc-border-dark: #555555;
+            --mc-text: #333;
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Prompt', sans-serif;
+            background-color: #87CEEB; /* Daytime Default */
+            transition: background-color 1s;
+            user-select: none;
+        }
+
+        body.night {
+            background-color: #0b0d17;
+        }
+
+        /* Minecraft UI Styling */
+        .mc-panel {
+            background: var(--mc-bg);
+            border: 4px solid;
+            border-color: var(--mc-border-light) var(--mc-border-dark) var(--mc-border-dark) var(--mc-border-light);
+            padding: 20px;
+            box-shadow: inset -2px -2px 0px rgba(0,0,0,0.25);
+            color: var(--mc-text);
+        }
+
+        .mc-btn {
+            font-family: 'Press Start 2P', cursive;
+            font-size: 12px;
+            background: #aaaaaa;
+            border: 4px solid;
+            border-color: var(--mc-border-light) var(--mc-border-dark) var(--mc-border-dark) var(--mc-border-light);
+            padding: 12px 16px;
+            cursor: pointer;
+            text-transform: uppercase;
+            color: black;
+            box-shadow: inset -2px -2px 0px rgba(0,0,0,0.1);
+        }
+
+        .mc-btn:hover { background: #b6b6b6; }
+        .mc-btn:active {
+            border-color: var(--mc-border-dark) var(--mc-border-light) var(--mc-border-light) var(--mc-border-dark);
+            box-shadow: inset 2px 2px 0px rgba(0,0,0,0.2);
+            padding: 14px 14px 10px 18px; /* Shift text slightly */
+        }
+
+        .title-font { font-family: 'Press Start 2P', cursive; }
+
+        /* Screens */
+        .screen {
+            position: absolute;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+        
+        .hidden { display: none !important; }
+
+        /* Main Menu */
+        #main-menu .mc-panel { text-align: center; max-width: 400px; }
+        #main-menu h1 { color: #2c3e50; font-size: 24px; text-shadow: 2px 2px 0px white; }
+        .menu-buttons { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
+
+        /* Help Modal */
+        #help-modal .mc-panel { max-width: 600px; line-height: 1.6; }
+        
+        /* Game UI Layout */
+        #game-ui {
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+            align-items: flex-start;
+            pointer-events: none; /* Let clicks pass to 3D if needed */
+        }
+
+        #hud {
+            pointer-events: auto;
+            position: absolute;
+            top: 20px; left: 20px;
+            padding: 10px 20px;
+            display: flex; gap: 20px;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        
+        #hud .heart { color: red; font-size: 24px; }
+
+        #sidebar {
+            pointer-events: auto;
+            position: absolute;
+            right: 0; top: 0;
+            width: 300px; height: 100vh;
+            display: flex; flex-direction: column;
+            border-left: 4px solid var(--mc-border-dark);
+            box-sizing: border-box;
+        }
+
+        .cmd-display {
+            flex-grow: 1;
+            background: #111;
+            border: 4px solid;
+            border-color: var(--mc-border-dark) var(--mc-border-light) var(--mc-border-light) var(--mc-border-dark);
+            margin-bottom: 10px;
+            padding: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            align-content: flex-start;
+            gap: 5px;
+            overflow-y: auto;
+        }
+
+        .cmd-chip {
+            background: #ffaa00;
+            border: 2px solid #fff;
+            padding: 5px 10px;
+            font-size: 14px;
+            font-weight: bold;
+            border-radius: 4px;
+            color: #000;
+        }
+
+        .controls-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        .controls-grid .full-w { grid-column: span 2; }
+
+        /* WebGL Container */
+        #canvas-container {
+            position: absolute;
+            top: 0; left: 0;
+            width: calc(100vw - 300px); /* 300px is sidebar width */
+            height: 100vh;
+            z-index: 1;
+        }
+
+        /* Overlay Modals */
+        .overlay { background: rgba(0,0,0,0.7); }
+    </style>
+</head>
+<body>
+
+    <!-- Screens -->
+    <div id="main-menu" class="screen">
+        <div class="mc-panel">
+            <h1 class="title-font">VOXEL CODER</h1>
+            <p>ฝึกคิดแบบโปรแกรมเมอร์ ผ่านโลกทรงลูกบาศก์!</p>
+            <div class="menu-buttons">
+                <button class="mc-btn" onclick="showDifficulty()">เล่นเกม (PLAY)</button>
+                <button class="mc-btn" onclick="toggleHelp(true)">วิธีเล่น (HELP)</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="help-modal" class="screen overlay hidden">
+        <div class="mc-panel">
+            <h2 class="title-font">วิธีเล่น</h2>
+            <p>- ภารกิจของคุณคือพาตัวละครเดินไปเก็บ <b>บล็อกเพชร</b><br>
+               - เลือกคำสั่ง (เดินหน้า, หันซ้าย, หันขวา) ใส่ในกล่องคำสั่ง<br>
+               - กด <b>"ประมวลผล"</b> เพื่อให้ตัวละครทำตามคำสั่ง<br>
+               - ระวังอุปสรรคและอย่าตกขอบโลก! หากผิดพลาดจะเสียหัวใจ<br>
+               - ศัตรูและบรรยากาศจะเปลี่ยนไปตามเวลากลางวัน-กลางคืน
+            </p>
+            <button class="mc-btn" onclick="toggleHelp(false)">เข้าใจแล้ว</button>
+        </div>
+    </div>
+
+    <div id="difficulty-menu" class="screen overlay hidden">
+        <div class="mc-panel">
+            <h2 class="title-font">เลือกระดับความยาก</h2>
+            <div class="menu-buttons">
+                <button class="mc-btn" style="color: green;" onclick="startGame('EASY')">EASY (Map 5x5, 3 Hearts)</button>
+                <button class="mc-btn" style="color: orange;" onclick="startGame('MEDIUM')">MEDIUM (Map 6x6, 3 Hearts)</button>
+                <button class="mc-btn" style="color: red;" onclick="startGame('HARD')">HARD (Map 7x7, 3 Hearts)</button>
+                <button class="mc-btn" style="color: darkred;" onclick="startGame('HARDCORE')">HARDCORE (Map 8x8, 1 Heart)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Interface -->
+    <div id="game-ui" class="screen hidden">
+        <div id="hud" class="mc-panel">
+            <div>Level: <span id="level-disp">1</span></div>
+            <div>Hearts: <span id="hearts-disp">❤️❤️❤️</span></div>
+        </div>
+        
+        <div id="sidebar" class="mc-panel">
+            <h3 class="title-font" style="font-size: 14px; text-align: center;">COMMANDS</h3>
+            <div class="cmd-display" id="cmd-list"></div>
+            
+            <div class="controls-grid">
+                <button class="mc-btn full-w" onclick="addCommand('F')">⬆️ เดินหน้า</button>
+                <button class="mc-btn" onclick="addCommand('L')">↩️ หันซ้าย</button>
+                <button class="mc-btn" onclick="addCommand('R')">↪️ หันขวา</button>
+                <button class="mc-btn" style="color: #c0392b;" onclick="removeLastCommand()">ลบคำสั่ง</button>
+                <button class="mc-btn" style="color: #d35400;" onclick="resetCommands()">เริ่มใหม่</button>
+                <button class="mc-btn full-w" style="background: #27ae60; color: white;" onclick="executeCommands()">▶ ประมวลผล</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Result Modals -->
+    <div id="level-clear-modal" class="screen overlay hidden">
+        <div class="mc-panel" style="text-align: center;">
+            <h2 class="title-font" style="color: #27ae60;">LEVEL CLEAR!</h2>
+            <p>เยี่ยมมาก! คุณผ่านด่านแล้ว</p>
+            <button class="mc-btn" onclick="nextLevel()">ด่านต่อไป</button>
+        </div>
+    </div>
+
+    <div id="game-over-modal" class="screen overlay hidden">
+        <div class="mc-panel" style="text-align: center;">
+            <h2 class="title-font" style="color: #c0392b;">GAME OVER</h2>
+            <p>หัวใจหมดแล้ว พยายามใหม่นะ!</p>
+            <button class="mc-btn" onclick="returnToMenu()">กลับสู่เมนูหลัก</button>
+        </div>
+    </div>
+
+    <!-- WebGL Rendering Area -->
+    <div id="canvas-container"></div>
+
+    <script>
+        /* ================= GAME STATE & LOGIC ================= */
+        let gameState = {
+            difficulty: 'EASY',
+            mapSize: 5,
+            maxHearts: 3,
+            hearts: 3,
+            level: 1, // 1 to 10
+            commands: [],
+            isPlaying: false,
+            grid: [],
+            playerPos: { x: 0, z: 0 },
+            playerDir: 0, // 0: +Z, 1: +X, 2: -Z, 3: -X
+            startX: 0, startZ: 0
+        };
+
+        const dirs = [
+            { dx: 0, dz: 1 },  // Face South (+Z)
+            { dx: 1, dz: 0 },  // Face East  (+X)
+            { dx: 0, dz: -1 }, // Face North (-Z)
+            { dx: -1, dz: 0 }  // Face West  (-X)
+        ];
+
+        /* ================= UI FUNCTIONS ================= */
+        function toggleHelp(show) { document.getElementById('help-modal').classList.toggle('hidden', !show); }
+        function showDifficulty() { 
+            document.getElementById('main-menu').classList.add('hidden');
+            document.getElementById('difficulty-menu').classList.remove('hidden');
+        }
+        function returnToMenu() {
+            document.getElementById('game-over-modal').classList.add('hidden');
+            document.getElementById('game-ui').classList.add('hidden');
+            document.getElementById('main-menu').classList.remove('hidden');
+            clearScene();
+        }
+
+        function startGame(diff) {
+            gameState.difficulty = diff;
+            gameState.level = 1;
+            if(diff === 'EASY') { gameState.mapSize = 5; gameState.maxHearts = 3; }
+            else if(diff === 'MEDIUM') { gameState.mapSize = 6; gameState.maxHearts = 3; }
+            else if(diff === 'HARD') { gameState.mapSize = 7; gameState.maxHearts = 3; }
+            else if(diff === 'HARDCORE') { gameState.mapSize = 8; gameState.maxHearts = 1; }
+            
+            gameState.hearts = gameState.maxHearts;
+            
+            document.getElementById('difficulty-menu').classList.add('hidden');
+            document.getElementById('game-ui').classList.remove('hidden');
+            
+            initThree();
+            loadLevel();
+        }
+
+        function updateHUD() {
+            document.getElementById('level-disp').innerText = gameState.level;
+            let heartStr = '';
+            for(let i=0; i<gameState.hearts; i++) heartStr += '❤️';
+            document.getElementById('hearts-disp').innerText = heartStr;
+            renderCommands();
+        }
+
+        function addCommand(cmd) {
+            if(gameState.isPlaying) return;
+            if(gameState.commands.length >= 20) return; // Limit commands
+            gameState.commands.push(cmd);
+            renderCommands();
+        }
+
+        function removeLastCommand() {
+            if(gameState.isPlaying) return;
+            gameState.commands.pop();
+            renderCommands();
+        }
+
+        function resetCommands() {
+            if(gameState.isPlaying) return;
+            gameState.commands = [];
+            renderCommands();
+            resetPlayerToStart();
+        }
+
+        function renderCommands() {
+            const container = document.getElementById('cmd-list');
+            container.innerHTML = '';
+            const labels = { 'F': '⬆️ หน้า', 'L': '↩️ ซ้าย', 'R': '↪️ ขวา' };
+            gameState.commands.forEach(cmd => {
+                const chip = document.createElement('div');
+                chip.className = 'cmd-chip';
+                chip.innerText = labels[cmd];
+                container.appendChild(chip);
+            });
+            container.scrollTop = container.scrollHeight;
+        }
+
+        /* ================= THREE.JS SETUP & MAP GEN ================= */
+        let scene, camera, renderer;
+        let playerGroup, limbs = {};
+        let mapGroup;
+        let isDayTime = true;
+
+        function initThree() {
+            if(scene) return; // Already initialized
+            
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+            
+            // Isometric Camera
+            const aspect = container.clientWidth / container.clientHeight;
+            const d = 10;
+            camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 1, 1000);
+            camera.position.set(20, 20, 20);
+            camera.lookAt(0, 0, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
+
+            // Lighting
+            const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambient);
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(10, 20, 10);
+            dirLight.castShadow = true;
+            scene.add(dirLight);
+
+            window.addEventListener('resize', () => {
+                const aspect = container.clientWidth / container.clientHeight;
+                camera.left = -d * aspect;
+                camera.right = d * aspect;
+                camera.top = d;
+                camera.bottom = -d;
+                camera.updateProjectionMatrix();
+                renderer.setSize(container.clientWidth, container.clientHeight);
+            });
+
+            animate();
+        }
+
+        function createVoxelPlayer() {
+            const group = new THREE.Group();
+            const matSkin = new THREE.MeshLambertMaterial({ color: 0xe0ac69 });
+            const matShirt = new THREE.MeshLambertMaterial({ color: 0x00ffff });
+            const matPants = new THREE.MeshLambertMaterial({ color: 0x0000ff });
+
+            // Body
+            const bodyGeo = new THREE.BoxGeometry(0.8, 1.2, 0.4);
+            const body = new THREE.Mesh(bodyGeo, matShirt);
+            body.position.y = 1.6;
+            body.castShadow = true;
+            group.add(body);
+
+            // Head
+            const headGeo = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+            const head = new THREE.Mesh(headGeo, matSkin);
+            head.position.y = 2.6;
+            
+            // Face marker (eyes)
+            const eyeGeo = new THREE.BoxGeometry(0.6, 0.1, 0.1);
+            const eyeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+            const eyes = new THREE.Mesh(eyeGeo, eyeMat);
+            eyes.position.set(0, 0, 0.4);
+            head.add(eyes);
+            
+            head.castShadow = true;
+            group.add(head);
+
+            // Function to create limb with top pivot
+            function createLimb(mat, w, h, d, yPos) {
+                const limb = new THREE.Group();
+                const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+                mesh.position.y = -h / 2;
+                mesh.castShadow = true;
+                limb.add(mesh);
+                limb.position.y = yPos;
+                return limb;
+            }
+
+            limbs.armL = createLimb(matSkin, 0.4, 1.2, 0.4, 2.2);
+            limbs.armL.position.x = 0.6;
+            group.add(limbs.armL);
+
+            limbs.armR = createLimb(matSkin, 0.4, 1.2, 0.4, 2.2);
+            limbs.armR.position.x = -0.6;
+            group.add(limbs.armR);
+
+            limbs.legL = createLimb(matPants, 0.4, 1.2, 0.4, 1.0);
+            limbs.legL.position.x = 0.2;
+            group.add(limbs.legL);
+
+            limbs.legR = createLimb(matPants, 0.4, 1.2, 0.4, 1.0);
+            limbs.legR.position.x = -0.2;
+            group.add(limbs.legR);
+
+            group.scale.set(0.6, 0.6, 0.6); // Scale down slightly
+            return group;
+        }
+
+        function createObstacle(type) {
+            const group = new THREE.Group();
+            let geo, mat;
+
+            if (type === 'TREE') {
+                const trunk = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1, 0.4), new THREE.MeshLambertMaterial({color: 0x5c4033}));
+                trunk.position.y = 0.5;
+                const leaves = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 1.2), new THREE.MeshLambertMaterial({color: 0x228b22}));
+                leaves.position.y = 1.5;
+                group.add(trunk, leaves);
+            } else if (type === 'STONE') {
+                const stone = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.8), new THREE.MeshLambertMaterial({color: 0x808080}));
+                stone.position.y = 0.4;
+                group.add(stone);
+            } else if (type === 'VILLAGER' || type === 'GOLEM') {
+                mat = new THREE.MeshLambertMaterial({color: type==='VILLAGER' ? 0xcd853f : 0xecf0f1});
+                const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.5, 0.8), mat);
+                body.position.y = 0.75;
+                group.add(body);
+            } else if (type === 'ZOMBIE' || type === 'CREEPER') {
+                mat = new THREE.MeshLambertMaterial({color: type==='ZOMBIE' ? 0x2e8b57 : 0x32cd32});
+                const mob = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.5, 0.8), mat);
+                mob.position.y = 0.75;
+                group.add(mob);
+            } else if (type === 'SKELETON' || type === 'ENDERMAN') {
+                mat = new THREE.MeshLambertMaterial({color: type==='SKELETON' ? 0xbdc3c7 : 0x2c3e50});
+                const tall = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.8, 0.6), mat);
+                tall.position.y = 0.9;
+                group.add(tall);
+            }
+
+            group.traverse(c => { if(c.isMesh) c.castShadow = c.receiveShadow = true; });
+            return group;
+        }
+
+        function createGoal() {
+            const diamond = new THREE.Mesh(
+                new THREE.BoxGeometry(0.8, 0.8, 0.8),
+                new THREE.MeshLambertMaterial({ color: 0x00ffff, emissive: 0x008888 })
+            );
+            diamond.position.y = 0.6;
+            // Add a simple animation to it later
+            diamond.userData = { isGoal: true };
+            return diamond;
+        }
+
+        function generateMapLogic() {
+            let s = gameState.mapSize;
+            let grid = Array(s).fill(null).map(()=>Array(s).fill('EMPTY'));
+            
+            // Guarantee Path
+            let cx = 0, cz = 0;
+            grid[cz][cx] = 'PATH';
+            while(cx < s-1 || cz < s-1) {
+                if(cx === s-1) cz++;
+                else if(cz === s-1) cx++;
+                else { Math.random() > 0.5 ? cx++ : cz++; }
+                grid[cz][cx] = 'PATH';
+            }
+            grid[s-1][s-1] = 'GOAL';
+
+            // Fill Obstacles
+            isDayTime = (gameState.level % 2 !== 0);
+            document.body.className = isDayTime ? 'day' : 'night';
+
+            const dayObs = ['TREE', 'STONE', 'VILLAGER', 'GOLEM'];
+            const nightObs = ['ZOMBIE', 'SKELETON', 'CREEPER', 'ENDERMAN'];
+            const obsPool = isDayTime ? dayObs : nightObs;
+
+            for(let z=0; z<s; z++){
+                for(let x=0; x<s; x++){
+                    if(grid[z][x] === 'EMPTY' && Math.random() < 0.3) {
+                        let randObs = obsPool[Math.floor(Math.random() * obsPool.length)];
+                        grid[z][x] = randObs;
+                    }
+                }
+            }
+            gameState.grid = grid;
+        }
+
+        function buildScene() {
+            if(mapGroup) scene.remove(mapGroup);
+            mapGroup = new THREE.Group();
+            
+            let s = gameState.mapSize;
+            let offset = (s - 1) / 2; // Center offset
+
+            const grassMat = new THREE.MeshLambertMaterial({ color: isDayTime ? 0x55aa55 : 0x224422 });
+            const dirtMat = new THREE.MeshLambertMaterial({ color: 0x8b4513 });
+
+            for(let z=0; z<s; z++){
+                for(let x=0; x<s; x++){
+                    // Ground Block
+                    const block = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), [
+                        dirtMat, dirtMat, grassMat, dirtMat, dirtMat, dirtMat
+                    ]);
+                    block.position.set(x - offset, -0.5, z - offset);
+                    block.receiveShadow = true;
+                    mapGroup.add(block);
+
+                    // Objects
+                    let cell = gameState.grid[z][x];
+                    if(cell === 'GOAL') {
+                        let goal = createGoal();
+                        goal.position.set(x - offset, 0, z - offset);
+                        mapGroup.add(goal);
+                    } else if (cell !== 'EMPTY' && cell !== 'PATH') {
+                        let obs = createObstacle(cell);
+                        obs.position.set(x - offset, 0, z - offset);
+                        mapGroup.add(obs);
+                    }
+                }
+            }
+
+            scene.add(mapGroup);
+
+            // Setup Player
+            if(!playerGroup) {
+                playerGroup = createVoxelPlayer();
+                scene.add(playerGroup);
+            }
+            
+            gameState.startX = 0;
+            gameState.startZ = 0;
+            resetPlayerToStart();
+
+            // Adjust Camera distance based on map size
+            camera.position.set(s*1.5, s*1.5, s*1.5);
+            camera.lookAt(0,0,0);
+        }
+
+        function resetPlayerToStart() {
+            let offset = (gameState.mapSize - 1) / 2;
+            gameState.playerPos = { x: gameState.startX, z: gameState.startZ };
+            gameState.playerDir = 0; // Face +Z (South)
+            
+            playerGroup.position.set(gameState.playerPos.x - offset, 0, gameState.playerPos.z - offset);
+            playerGroup.rotation.y = 0;
+            
+            // Reset Limbs
+            limbs.armL.rotation.x = limbs.armR.rotation.x = 0;
+            limbs.legL.rotation.x = limbs.legR.rotation.x = 0;
+        }
+
+        function clearScene() {
+            if(mapGroup) scene.remove(mapGroup);
+            if(playerGroup) scene.remove(playerGroup);
+            playerGroup = null;
+        }
+
+        function loadLevel() {
+            generateMapLogic();
+            buildScene();
+            gameState.commands = [];
+            updateHUD();
+        }
+
+        function nextLevel() {
+            document.getElementById('level-clear-modal').classList.add('hidden');
+            gameState.level++;
+            if(gameState.level > 10) {
+                alert("🎉 ยินดีด้วย! คุณเคลียร์ครบ 10 ด่านแล้ว เป็นโปรแกรมเมอร์ที่ยอดเยี่ยมมาก!");
+                returnToMenu();
+                return;
+            }
+            loadLevel();
+        }
+
+        /* ================= ANIMATION & EXECUTION ================= */
+        const lerp = (start, end, t) => start * (1 - t) + end * t;
+
+        function animateCommand(cmd) {
+            return new Promise(resolve => {
+                let startPos = playerGroup.position.clone();
+                let startRot = playerGroup.rotation.y;
+                let targetPos = startPos.clone();
+                let targetRot = startRot;
+
+                let dx = 0, dz = 0;
+
+                if (cmd === 'L') {
+                    gameState.playerDir = (gameState.playerDir + 3) % 4;
+                    targetRot += Math.PI / 2;
+                } else if (cmd === 'R') {
+                    gameState.playerDir = (gameState.playerDir + 1) % 4;
+                    targetRot -= Math.PI / 2;
+                } else if (cmd === 'F') {
+                    let dir = dirs[gameState.playerDir];
+                    dx = dir.dx; dz = dir.dz;
+                    gameState.playerPos.x += dx;
+                    gameState.playerPos.z += dz;
+                    targetPos.x += dx;
+                    targetPos.z += dz;
+                }
+
+                let duration = 500;
+                let startTime = performance.now();
+
+                function updateFrame(now) {
+                    let elapsed = now - startTime;
+                    let progress = Math.min(elapsed / duration, 1);
+                    
+                    // Easing (Smooth step)
+                    let ease = progress * progress * (3 - 2 * progress);
+
+                    // Lerp transform
+                    playerGroup.position.lerpVectors(startPos, targetPos, ease);
+                    playerGroup.rotation.y = lerp(startRot, targetRot, ease);
+
+                    // Animate Limbs if walking
+                    if (cmd === 'F') {
+                        let swing = Math.sin(progress * Math.PI * 2) * 0.8;
+                        limbs.armL.rotation.x = swing;
+                        limbs.armR.rotation.x = -swing;
+                        limbs.legL.rotation.x = -swing;
+                        limbs.legR.rotation.x = swing;
+                        
+                        // Bounce effect
+                        playerGroup.position.y = Math.sin(progress * Math.PI) * 0.3;
+                    }
+
+                    if (progress < 1) {
+                        requestAnimationFrame(updateFrame);
+                    } else {
+                        // Reset limb positions safely
+                        limbs.armL.rotation.x = limbs.armR.rotation.x = 0;
+                        limbs.legL.rotation.x = limbs.legR.rotation.x = 0;
+                        playerGroup.position.y = 0;
+                        resolve();
+                    }
+                }
+                requestAnimationFrame(updateFrame);
+            });
+        }
+
+        async function executeCommands() {
+            if (gameState.isPlaying || gameState.commands.length === 0) return;
+            gameState.isPlaying = true;
+
+            for (let i = 0; i < gameState.commands.length; i++) {
+                let cmd = gameState.commands[i];
+                
+                // Highlight current command visually (optional enhancement)
+                const chips = document.getElementById('cmd-list').children;
+                for(let c of chips) c.style.borderColor = '#fff';
+                if(chips[i]) chips[i].style.borderColor = 'red';
+
+                await animateCommand(cmd);
+
+                // Check collisions after move
+                if (cmd === 'F') {
+                    let px = gameState.playerPos.x;
+                    let pz = gameState.playerPos.z;
+                    let size = gameState.mapSize;
+
+                    // Fall off map
+                    if (px < 0 || px >= size || pz < 0 || pz >= size) {
+                        await handleFail("ตกขอบโลก!");
+                        return; // Stop execution
+                    }
+
+                    // Hit obstacle
+                    let cell = gameState.grid[pz][px];
+                    if (cell !== 'EMPTY' && cell !== 'PATH' && cell !== 'GOAL') {
+                        await handleFail("ชนอุปสรรค!");
+                        return; // Stop execution
+                    }
+                    
+                    // Reach Goal
+                    if (cell === 'GOAL') {
+                        setTimeout(() => {
+                            document.getElementById('level-clear-modal').classList.remove('hidden');
+                            gameState.isPlaying = false;
+                        }, 500);
+                        return;
+                    }
+                }
+                
+                await new Promise(r => setTimeout(r, 200)); // Short pause between commands
+            }
+
+            // Finished commands but didn't reach goal
+            gameState.isPlaying = false;
+            let px = gameState.playerPos.x, pz = gameState.playerPos.z;
+            if(gameState.grid[pz][px] !== 'GOAL') {
+                alert("ยังไปไม่ถึงเป้าหมาย! ลองจัดลำดับคำสั่งใหม่นะ");
+                resetCommands();
+            }
+        }
+
+        async function handleFail(msg) {
+            gameState.hearts--;
+            updateHUD();
+            
+            // Death Animation (Fall over)
+            let startRot = playerGroup.rotation.z;
+            let targetRot = Math.PI / 2;
+            let startTime = performance.now();
+            await new Promise(res => {
+                function fall(now) {
+                    let progress = Math.min((now - startTime) / 300, 1);
+                    playerGroup.rotation.z = lerp(startRot, targetRot, progress);
+                    if(progress < 1) requestAnimationFrame(fall);
+                    else res();
+                }
+                requestAnimationFrame(fall);
+            });
+
+            await new Promise(r => setTimeout(r, 800));
+            playerGroup.rotation.z = 0;
+
+            if (gameState.hearts <= 0) {
+                document.getElementById('game-over-modal').classList.remove('hidden');
+            } else {
+                alert(msg + " เสีย 1 หัวใจ ลองใหม่นะ!");
+                resetCommands();
+            }
+            gameState.isPlaying = false;
+        }
+
+        // Main Render Loop
+        function animate() {
+            requestAnimationFrame(animate);
+            if (renderer && scene && camera) {
+                // Goal rotation animation
+                if (mapGroup) {
+                    mapGroup.children.forEach(child => {
+                        if(child.userData && child.userData.isGoal) {
+                            child.rotation.y += 0.05;
+                            child.position.y = 0.6 + Math.sin(Date.now() * 0.005) * 0.2;
+                        }
+                    });
+                }
+                renderer.render(scene, camera);
+            }
+        }
+    </script>
+</body>
+</html>
